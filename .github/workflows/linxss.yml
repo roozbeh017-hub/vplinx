@@ -1,1 +1,67 @@
+name: Linux Cloud SSH
 
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: 1. Enable & Configure SSH
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y openssh-server
+          sudo systemctl enable ssh
+          sudo systemctl start ssh
+          
+          # Allow password authentication (optional but convenient)
+          sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+          sudo sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
+          sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+          sudo systemctl restart ssh
+
+      - name: 2. Create Admin Account
+        run: |
+          # Create user with password
+          sudo useradd -m -s /bin/bash NvDAdmin || true
+          echo "NvDAdmin:P@ssw0rd1qazXSW@#" | sudo chpasswd
+          
+          # Give sudo privileges (no password required for convenience)
+          echo "NvDAdmin ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/nvdadmin
+          sudo chmod 440 /etc/sudoers.d/nvdadmin
+          
+          # Also set a password for the default runner user if you want
+          echo "runner:P@ssw0rd1qazXSW@#" | sudo chpasswd || true
+
+      - name: 3. Install & Connect Tailscale VPN
+        env:
+          TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+        run: |
+          # Install Tailscale
+          curl -fsSL https://tailscale.com/install.sh | sh
+          
+          # Connect to your Tailscale network
+          sudo tailscale up --authkey="$TAILSCALE_AUTHKEY" --hostname="github-linux-ssh"
+          
+          sleep 5
+          
+          # Get Tailscale IP
+          TS_IP=$(tailscale ip -4)
+          
+          echo ""
+          echo "=================================================="
+          echo "  >>> LINUX SSH SERVER IS READY! <<<"
+          echo "  Tailscale IP : $TS_IP"
+          echo "  Username     : NvDAdmin"
+          echo "  Password     : P@ssw0rd1qazXSW@#"
+          echo "  >> Connect with: ssh NvDAdmin@$TS_IP"
+          echo "=================================================="
+
+      - name: 4. Keep Server Alive (up to ~6 hours)
+        run: |
+          for i in $(seq 1 360); do
+            echo "[$i/360] Server still running..."
+            sleep 60
+          done
