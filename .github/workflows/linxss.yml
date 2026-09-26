@@ -59,9 +59,10 @@ jobs:
           echo "  >> Connect with: ssh NvDAdmin@$TS_IP"
           echo "=================================================="
 
-      - name: 4. Keep Server Alive (up to 48 hours)
+      - name: 4. Keep Server Alive (48 Hours)
         run: |
           for ($i = 1; $i -le 2880; $i++) {
             Start-Sleep -Seconds 60
             Write-Host "[$i/2880] Server running..."
           }
+          
